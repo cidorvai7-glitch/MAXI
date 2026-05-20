@@ -1,24 +1,39 @@
-name: Build MAXI APK
+name: Android CI
 
 on:
   push:
-    branches: [ main, master ]
-  workflow_dispatch:
+    branches: [ "main" ]
 
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
-        with:
-          java-version: '17'
-          distribution: 'temurin'
-      - uses: gradle/actions/setup-gradle@v3
-      - run: chmod +x gradlew
-      - run: ./gradlew assembleDebug
-      - uses: actions/upload-artifact@v4
-        with:
-          name: MAXI-debug-apk
-          path: app/build/outputs/apk/debug/app-debug.apk
-          retention-days: 30
+    - uses: actions/checkout@v4
+
+    - name: Set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+
+    # গিটহাবের নিজস্ব গ্রেডল সেটআপ করা (এটি আপনার লোকাল গ্র্যাডল ফাইল খুঁজবে না)
+    - name: Setup Gradle
+      uses: gradle/actions/setup-gradle@v3
+
+    # সরাসরি 'gradle' কমান্ড দিয়ে বিল্ড করা (./gradlew এর বদলে)
+    - name: Build with Gradle
+      run: |
+        if [ -f "build.gradle" ]; then
+          gradle assembleDebug
+        elif [ -d "MAXI-main" ]; then
+          cd MAXI-main && gradle assembleDebug
+        elif [ -d "MAXI" ]; then
+          cd MAXI && gradle assembleDebug
+        fi
+
+    - name: Upload APK
+      uses: actions/upload-artifact@v4
+      with:
+        name: app-debug
+        path: "**/build/outputs/apk/debug/*.apk"
