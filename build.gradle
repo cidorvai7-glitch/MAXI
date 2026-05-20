@@ -1,23 +1,22 @@
+// Top-level build file where you can add configuration options common to all sub-projects/modules.
 buildscript {
     ext {
-        kotlin_version = '1.9.0' // Use a recent Kotlin version
-        compose_version = '1.5.4' // Use a recent Compose version if applicable
+        kotlin_version = '1.9.0'
     }
     repositories {
         google()
         mavenCentral()
     }
     dependencies {
-        classpath 'com.android.tools.build:gradle:8.2.0' // Use a recent Gradle plugin version
+        classpath 'com.android.tools.build:gradle:8.2.0'
         classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
     }
 }
 
+// এই অংশটি খালি রাখুন অথবা ডিলিট করে দিন
+// কারণ এগুলো এখন settings.gradle থেকে কন্ট্রোল হচ্ছে
 allprojects {
-    repositories {
-        google()
-        mavenCentral()
-    }
+    // এখানে কোনো repositories ব্লক রাখা যাবে না
 }
 
 task clean(type: Delete) {
