@@ -1,0 +1,406 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#000000"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingBottom="100dp">
+
+        <!-- Top Bar -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:padding="16dp">
+
+            <ImageView
+                android:id="@+id/btnBack"
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:src="@android:drawable/ic_media_previous"
+                android:tint="#FF3030"
+                android:background="?attr/selectableItemBackgroundBorderless"/>
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="S E T T I N G S"
+                android:textColor="#FF3030"
+                android:textSize="16sp"
+                android:letterSpacing="0.4"
+                android:fontFamily="monospace"
+                android:gravity="center"/>
+
+            <View android:layout_width="24dp" android:layout_height="24dp"/>
+        </LinearLayout>
+
+        <!-- Divider -->
+        <View android:layout_width="match_parent" android:layout_height="1dp" android:background="#1A0000" android:layout_marginBottom="8dp"/>
+
+        <!-- API Key Card -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="#0D0D0D"
+            android:layout_marginStart="12dp"
+            android:layout_marginEnd="12dp"
+            android:layout_marginBottom="10dp"
+            android:padding="16dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="🔑  Gemini API Key"
+                android:textColor="#FF3030"
+                android:textSize="13sp"
+                android:fontFamily="monospace"
+                android:layout_marginBottom="10dp"/>
+
+            <EditText
+                android:id="@+id/etApiKey"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="Enter your Gemini API key..."
+                android:hintTextColor="#444444"
+                android:textColor="#CCCCCC"
+                android:textSize="13sp"
+                android:fontFamily="monospace"
+                android:background="#1A1A1A"
+                android:padding="12dp"
+                android:inputType="textVisiblePassword"
+                android:maxLines="1"/>
+        </LinearLayout>
+
+        <!-- Your Name Card -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="#0D0D0D"
+            android:layout_marginStart="12dp"
+            android:layout_marginEnd="12dp"
+            android:layout_marginBottom="10dp"
+            android:padding="16dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="👤  Your Name"
+                android:textColor="#FF3030"
+                android:textSize="13sp"
+                android:fontFamily="monospace"
+                android:layout_marginBottom="10dp"/>
+
+            <EditText
+                android:id="@+id/etUserName"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="What should MAXI call you?"
+                android:hintTextColor="#444444"
+                android:textColor="#CCCCCC"
+                android:textSize="13sp"
+                android:fontFamily="monospace"
+                android:background="#1A1A1A"
+                android:padding="12dp"
+                android:maxLines="1"/>
+        </LinearLayout>
+
+        <!-- Personality Card -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="#0D0D0D"
+            android:layout_marginStart="12dp"
+            android:layout_marginEnd="12dp"
+            android:layout_marginBottom="10dp"
+            android:padding="16dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="🧠  Personality Mode"
+                android:textColor="#FF3030"
+                android:textSize="13sp"
+                android:fontFamily="monospace"
+                android:layout_marginBottom="14dp"/>
+
+            <!-- Boss Mode -->
+            <LinearLayout
+                android:id="@+id/personalityBoss"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:padding="10dp"
+                android:background="#1A1A1A"
+                android:layout_marginBottom="8dp">
+
+                <RadioButton
+                    android:id="@+id/radioBoss"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:buttonTint="#FF3030"
+                    android:checked="true"/>
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical"
+                    android:layout_marginStart="10dp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="⚡ Boss Mode"
+                        android:textColor="#CCCCCC"
+                        android:textSize="13sp"
+                        android:fontFamily="monospace"/>
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Direct, concise, no-nonsense"
+                        android:textColor="#666666"
+                        android:textSize="11sp"
+                        android:fontFamily="monospace"/>
+                </LinearLayout>
+            </LinearLayout>
+
+            <!-- Smart Companion Mode -->
+            <LinearLayout
+                android:id="@+id/personalityCompanion"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:padding="10dp"
+                android:background="#1A1A1A">
+
+                <RadioButton
+                    android:id="@+id/radioCompanion"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:buttonTint="#FF3030"
+                    android:checked="false"/>
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical"
+                    android:layout_marginStart="10dp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="💫 Smart Companion"
+                        android:textColor="#CCCCCC"
+                        android:textSize="13sp"
+                        android:fontFamily="monospace"/>
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Caring, fun, reads the room"
+                        android:textColor="#666666"
+                        android:textSize="11sp"
+                        android:fontFamily="monospace"/>
+                </LinearLayout>
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- Advanced Permissions Card -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="#0D0D0D"
+            android:layout_marginStart="12dp"
+            android:layout_marginEnd="12dp"
+            android:layout_marginBottom="10dp"
+            android:padding="16dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="🛡️  Advanced Permissions"
+                android:textColor="#FF3030"
+                android:textSize="13sp"
+                android:fontFamily="monospace"
+                android:layout_marginBottom="14dp"/>
+
+            <!-- Device Admin -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:paddingBottom="12dp">
+
+                <TextView
+                    android:layout_width="24dp"
+                    android:layout_height="wrap_content"
+                    android:text="🔋"
+                    android:textSize="16sp"/>
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical"
+                    android:layout_marginStart="10dp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Device Administrator"
+                        android:textColor="#CCCCCC"
+                        android:textSize="13sp"
+                        android:fontFamily="monospace"/>
+
+                    <TextView
+                        android:id="@+id/tvDeviceAdminStatus"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="❌ Admin Inactive"
+                        android:textColor="#FF3030"
+                        android:textSize="11sp"
+                        android:fontFamily="monospace"/>
+                </LinearLayout>
+
+                <TextView
+                    android:id="@+id/btnDeviceAdmin"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="ENABLE"
+                    android:textColor="#FF3030"
+                    android:textSize="11sp"
+                    android:fontFamily="monospace"
+                    android:background="#1A0000"
+                    android:padding="8dp"/>
+            </LinearLayout>
+
+            <View android:layout_width="match_parent" android:layout_height="1dp" android:background="#1A1A1A" android:layout_marginBottom="12dp"/>
+
+            <!-- Accessibility -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
+
+                <TextView
+                    android:layout_width="24dp"
+                    android:layout_height="wrap_content"
+                    android:text="⚙️"
+                    android:textSize="16sp"/>
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical"
+                    android:layout_marginStart="10dp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Accessibility Service"
+                        android:textColor="#CCCCCC"
+                        android:textSize="13sp"
+                        android:fontFamily="monospace"/>
+
+                    <TextView
+                        android:id="@+id/tvAccessibilityStatus"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="❌ Accessibility Off"
+                        android:textColor="#FF3030"
+                        android:textSize="11sp"
+                        android:fontFamily="monospace"/>
+                </LinearLayout>
+
+                <TextView
+                    android:id="@+id/btnAccessibility"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="ENABLE"
+                    android:textColor="#FF3030"
+                    android:textSize="11sp"
+                    android:fontFamily="monospace"
+                    android:background="#1A0000"
+                    android:padding="8dp"/>
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- Permissions Card -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="#0D0D0D"
+            android:layout_marginStart="12dp"
+            android:layout_marginEnd="12dp"
+            android:layout_marginBottom="10dp"
+            android:padding="16dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="🔧  Permissions"
+                android:textColor="#FF3030"
+                android:textSize="13sp"
+                android:fontFamily="monospace"
+                android:layout_marginBottom="12dp"/>
+
+            <Button
+                android:id="@+id/btnGrantPermissions"
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:text="Grant Permissions"
+                android:textColor="#FFFFFF"
+                android:textSize="13sp"
+                android:fontFamily="monospace"
+                android:backgroundTint="#CC0000"
+                android:stateListAnimator="@null"/>
+
+            <TextView
+                android:id="@+id/tvPermissionsStatus"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="⚠️ Checking permissions..."
+                android:textColor="#FF8800"
+                android:textSize="11sp"
+                android:fontFamily="monospace"
+                android:layout_marginTop="8dp"/>
+        </LinearLayout>
+
+        <!-- Save Button -->
+        <Button
+            android:id="@+id/btnSaveSettings"
+            android:layout_width="match_parent"
+            android:layout_height="56dp"
+            android:text="SAVE SETTINGS"
+            android:textColor="#FFFFFF"
+            android:textSize="14sp"
+            android:letterSpacing="0.2"
+            android:fontFamily="monospace"
+            android:backgroundTint="#CC0000"
+            android:stateListAnimator="@null"
+            android:layout_marginStart="12dp"
+            android:layout_marginEnd="12dp"
+            android:layout_marginTop="8dp"/>
+
+    </LinearLayout>
+</ScrollView>
