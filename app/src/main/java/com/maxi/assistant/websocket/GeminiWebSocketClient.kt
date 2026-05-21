@@ -128,7 +128,7 @@ class GeminiWebSocketClient(
             val obj = JSONObject(json)
 
             // Setup complete
-            if (obj.has("setupComplete") || obj.optJSONObject("setupComplete") != null) {
+            if (obj.has("setupComplete")) {
                 isSetupComplete = true
                 Log.d(TAG, "Gemini Ready ✅")
                 onConnected()
