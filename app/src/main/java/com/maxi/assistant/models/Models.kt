@@ -1,0 +1,37 @@
+package com.maxi.assistant.models
+
+data class VoiceCommand(
+    val rawText: String,
+    val commandType: CommandType,
+    val parameters: Map<String, String> = emptyMap(),
+    val confidence: Float = 1.0f
+)
+
+enum class CommandType {
+    OPEN_APP,
+    SEND_MESSAGE,
+    MAKE_CALL,
+    SEARCH,
+    SET_ALARM,
+    PLAY_MUSIC,
+    NAVIGATE,
+    SYSTEM_CONTROL,
+    TAKE_PHOTO,
+    READ_NOTIFICATION,
+    AUTOMATION,
+    CONVERSATION,
+    UNKNOWN
+}
+
+data class AIResponse(
+    val text: String,
+    val action: CommandType? = null,
+    val parameters: Map<String, String> = emptyMap(),
+    val isSuccess: Boolean = true
+)
+
+data class AppInfo(
+    val packageName: String,
+    val appName: String,
+    val isSystemApp: Boolean = false
+)
