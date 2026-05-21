@@ -1,26 +1,21 @@
 package com.maxi.assistant.ui.settings
 
 import android.Manifest
-import android.app.admin.DevicePolicyManager
-import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.net.Uri
 import android.os.Bundle
 import android.provider.Settings
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import com.maxi.assistant.databinding.ActivitySettingsBinding
-import com.maxi.assistant.service.MyraDeviceAdminReceiver
 import com.maxi.assistant.utils.Constants
 
 class SettingsActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivitySettingsBinding
 
-    // Personality system prompts
     private val PERSONALITY_BOSS = """
 You are MAXI, an AI assistant in Boss Mode.
 Rules:
@@ -53,7 +48,6 @@ Rules:
         setupButtons()
         updatePermissionsStatus()
         updateAccessibilityStatus()
-        updateDeviceAdminStatus()
     }
 
     private fun loadSettings() {
@@ -74,7 +68,6 @@ Rules:
     private fun setupButtons() {
         binding.btnBack.setOnClickListener { finish() }
 
-        // Radio buttons
         binding.personalityBoss.setOnClickListener {
             binding.radioBoss.isChecked = true
             binding.radioCompanion.isChecked = false
@@ -90,7 +83,6 @@ Rules:
             if (checked) binding.radioBoss.isChecked = false
         }
 
-        // Grant permissions
         binding.btnGrantPermissions.setOnClickListener {
             requestPermissions(
                 arrayOf(
@@ -102,23 +94,14 @@ Rules:
             )
         }
 
-        // Accessibility
         binding.btnAccessibility.setOnClickListener {
             startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
         }
 
-        // Device Admin
         binding.btnDeviceAdmin.setOnClickListener {
-            val intent = Intent(DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN).apply {
-                putExtra(DevicePolicyManager.EXTRA_DEVICE_ADMIN,
-                    ComponentName(this@SettingsActivity, MyraDeviceAdminReceiver::class.java))
-                putExtra(DevicePolicyManager.EXTRA_ADD_EXPLANATION,
-                    "MAXI needs device admin for reboot/power control.")
-            }
-            startActivity(intent)
+            startActivity(Intent(Settings.ACTION_SECURITY_SETTINGS))
         }
 
-        // Save
         binding.btnSaveSettings.setOnClickListener { saveSettings() }
     }
 
@@ -166,23 +149,12 @@ Rules:
             Settings.Secure.getInt(contentResolver, Settings.Secure.ACCESSIBILITY_ENABLED) == 1
         } catch (e: Exception) { false }
 
-        binding.tvAccessibilityStatus.text = if (enabled)
-            "✅ Accessibility On"
-        else
-            "❌ Accessibility Off"
+        binding.tvAccessibilityStatus.text = if (enabled) "✅ Accessibility On" else "❌ Accessibility Off"
         binding.tvAccessibilityStatus.setTextColor(
             if (enabled) 0xFF00AA44.toInt() else 0xFFFF3030.toInt()
         )
-    }
-
-    private fun updateDeviceAdminStatus() {
-        val dpm = getSystemService(DEVICE_POLICY_SERVICE) as DevicePolicyManager
-        val admin = ComponentName(this, MyraDeviceAdminReceiver::class.java)
-        val active = dpm.isAdminActive(admin)
-        binding.tvDeviceAdminStatus.text = if (active) "✅ Admin Active" else "❌ Admin Inactive"
-        binding.tvDeviceAdminStatus.setTextColor(
-            if (active) 0xFF00AA44.toInt() else 0xFFFF3030.toInt()
-        )
+        binding.tvDeviceAdminStatus.text = "ℹ️ Go to Security Settings"
+        binding.tvDeviceAdminStatus.setTextColor(0xFF888888.toInt())
     }
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<String>, results: IntArray) {
@@ -193,6 +165,5 @@ Rules:
     override fun onResume() {
         super.onResume()
         updateAccessibilityStatus()
-        updateDeviceAdminStatus()
     }
 }
