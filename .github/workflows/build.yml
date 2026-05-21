@@ -3,6 +3,7 @@ name: Android CI
 on:
   push:
     branches: [ "main" ]
+  workflow_dispatch:
 
 jobs:
   build:
@@ -16,24 +17,16 @@ jobs:
       with:
         java-version: '17'
         distribution: 'temurin'
+        cache: gradle
 
-    # গিটহাবের নিজস্ব গ্রেডল সেটআপ করা (এটি আপনার লোকাল গ্র্যাডল ফাইল খুঁজবে না)
-    - name: Setup Gradle
-      uses: gradle/actions/setup-gradle@v3
+    - name: Grant execute permission
+      run: chmod +x ./gradlew
 
-    # সরাসরি 'gradle' কমান্ড দিয়ে বিল্ড করা (./gradlew এর বদলে)
-    - name: Build with Gradle
-      run: |
-        if [ -f "build.gradle" ]; then
-          gradle assembleDebug
-        elif [ -d "MAXI-main" ]; then
-          cd MAXI-main && gradle assembleDebug
-        elif [ -d "MAXI" ]; then
-          cd MAXI && gradle assembleDebug
-        fi
+    - name: Build Debug APK
+      run: ./gradlew assembleDebug --stacktrace
 
     - name: Upload APK
       uses: actions/upload-artifact@v4
       with:
-        name: app-debug
-        path: "**/build/outputs/apk/debug/*.apk"
+        name: MAXI-debug-apk
+        path: app/build/outputs/apk/debug/app-debug.apk
