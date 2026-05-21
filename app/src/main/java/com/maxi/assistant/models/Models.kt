@@ -44,6 +44,8 @@ enum class CommandType {
     REBOOT,
     POWER_OFF,
     SCREENSHOT,
+    OPEN_WEBSITE,
+    PHONE_STATUS,
     UNKNOWN
 }
 
