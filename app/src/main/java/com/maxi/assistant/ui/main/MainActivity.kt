@@ -7,22 +7,18 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
-import android.media.AudioFormat
-import android.media.AudioManager
-import android.media.AudioRecord
-import android.media.AudioTrack
-import android.media.MediaRecorder
-import android.net.Uri
 import android.os.BatteryManager
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
-import android.provider.Settings
+import android.speech.RecognitionListener
+import android.speech.RecognizerIntent
+import android.speech.SpeechRecognizer
+import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.TextView
-import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
@@ -32,13 +28,14 @@ import com.maxi.assistant.R
 import com.maxi.assistant.databinding.ActivityMainBinding
 import com.maxi.assistant.ui.settings.SettingsActivity
 import com.maxi.assistant.utils.Constants
+import com.maxi.assistant.utils.LiveAudioManager
 import com.maxi.assistant.websocket.GeminiWebSocketClient
 import java.text.SimpleDateFormat
 import java.util.*
 
 data class ChatMessage(val text: String, val isUser: Boolean, val time: String)
 
-class ChatAdapter(private val messages: MutableList<ChatMessage>) :
+class ChatAdapter(private val messages: MutableList<ChatMessage> = mutableListOf()) :
     RecyclerView.Adapter<ChatAdapter.VH>() {
 
     inner class VH(v: View) : RecyclerView.ViewHolder(v) {
@@ -60,6 +57,11 @@ class ChatAdapter(private val messages: MutableList<ChatMessage>) :
         holder.tvMsg.text = msg.text
         holder.tvTime.text = msg.time
     }
+
+    fun addMessage(msg: ChatMessage) {
+        messages.add(msg)
+        notifyItemInserted(messages.size - 1)
+    }
 }
 
 class MainActivity : AppCompatActivity() {
@@ -69,17 +71,17 @@ class MainActivity : AppCompatActivity() {
     private lateinit var chatAdapter: ChatAdapter
     private val handler = Handler(Looper.getMainLooper())
     private val timeFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
+    private val TAG = "MAXI_MAIN"
 
-    private var geminiClient: GeminiWebSocketClient? = null
-    private var audioRecord: AudioRecord? = null
-    private var audioTrack: AudioTrack? = null
-    private var recordThread: Thread? = null
-    @Volatile private var isListening = false
-    @Volatile private var isSpeaking = false
+    private lateinit var geminiClient: GeminiWebSocketClient
+    private lateinit var audioManager: LiveAudioManager
+    private var isLiveConnected = false
 
-    private val SAMPLE_RATE_IN = 16000
-    private val SAMPLE_RATE_OUT = 24000
-    private val CHUNK_SIZE = 1024
+    private var speechRecognizer: SpeechRecognizer? = null
+    private var isListening = false
+    private var isActive = false
+    private var isSpeaking = false
+    private var lastBotResponse = ""
 
     private val PERMISSIONS = arrayOf(
         Manifest.permission.RECORD_AUDIO,
@@ -87,14 +89,12 @@ class MainActivity : AppCompatActivity() {
         Manifest.permission.CALL_PHONE,
         Manifest.permission.READ_CONTACTS
     )
-    private val PERMISSION_REQUEST_CODE = 101
 
     private val batteryReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             val level = intent.getIntExtra(BatteryManager.EXTRA_LEVEL, -1)
             val scale = intent.getIntExtra(BatteryManager.EXTRA_SCALE, -1)
-            val pct = (level * 100 / scale.toFloat()).toInt()
-            binding.tvBattery.text = "$pct%"
+            if (scale > 0) binding.tvBattery.text = "${(level * 100 / scale.toFloat()).toInt()}%"
         }
     }
 
@@ -111,30 +111,181 @@ class MainActivity : AppCompatActivity() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
+        audioManager = LiveAudioManager(this)
         setupChat()
         setupButtons()
-        startClock()
-        registerBatteryReceiver()
-        checkAndRequestPermissions()
-        initAudioTrack()
+        handler.post(clockRunnable)
+        registerReceiver(batteryReceiver, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
+        checkPermissions()
+        createSpeechRecognizer()
     }
 
-    private fun initAudioTrack() {
-        val bufSize = AudioTrack.getMinBufferSize(
-            SAMPLE_RATE_OUT,
-            AudioFormat.CHANNEL_OUT_MONO,
-            AudioFormat.ENCODING_PCM_16BIT
-        )
-        audioTrack = AudioTrack(
-            AudioManager.STREAM_MUSIC,
-            SAMPLE_RATE_OUT,
-            AudioFormat.CHANNEL_OUT_MONO,
-            AudioFormat.ENCODING_PCM_16BIT,
-            bufSize * 4,
-            AudioTrack.MODE_STREAM
-        )
-        audioTrack?.play()
+    // ── Speech Recognizer ─────────────────────────────────────────────────────
+
+    private fun createSpeechRecognizer() {
+        try { speechRecognizer?.destroy() } catch (_: Exception) {}
+        if (!SpeechRecognizer.isRecognitionAvailable(this)) {
+            addMessage("⚠️ Speech recognition device এ নেই।", false); return
+        }
+        speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this)
+        speechRecognizer?.setRecognitionListener(object : RecognitionListener {
+            override fun onResults(results: Bundle?) {
+                isListening = false
+                val text = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                    ?.firstOrNull { it.isNotBlank() } ?: ""
+                if (text.isBlank()) { scheduleRestart(600); return }
+                if (isEcho(text)) { Log.d(TAG, "Echo skip: $text"); scheduleRestart(800); return }
+
+                addMessage(text, true)
+                binding.tvStatus.text = "THINKING..."
+                if (isLiveConnected) {
+                    geminiClient.sendTextMessage(text)
+                } else {
+                    addMessage("⚠️ Gemini connected নেই। Reconnect করুন।", false)
+                }
+            }
+            override fun onError(code: Int) {
+                isListening = false
+                if (isSpeaking) return
+                when (code) {
+                    SpeechRecognizer.ERROR_NO_MATCH,
+                    SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> scheduleRestart(500)
+                    SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> {
+                        handler.postDelayed({ createSpeechRecognizer(); scheduleRestart(900) }, 600)
+                    }
+                    SpeechRecognizer.ERROR_AUDIO,
+                    SpeechRecognizer.ERROR_CLIENT -> {
+                        handler.postDelayed({ createSpeechRecognizer(); scheduleRestart(1200) }, 600)
+                    }
+                    else -> scheduleRestart(1000)
+                }
+            }
+            override fun onReadyForSpeech(p: Bundle?) { binding.tvStatus.text = "LISTENING..." }
+            override fun onBeginningOfSpeech() {}
+            override fun onEndOfSpeech() { binding.tvStatus.text = "PROCESSING..." }
+            override fun onPartialResults(b: Bundle?) {
+                val partial = b?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()
+                if (!partial.isNullOrBlank()) binding.tvStatus.text = "$partial..."
+            }
+            override fun onRmsChanged(f: Float) {}
+            override fun onBufferReceived(b: ByteArray?) {}
+            override fun onEvent(t: Int, b: Bundle?) {}
+        })
     }
+
+    private fun startListening() {
+        if (isListening || isSpeaking || !isActive) return
+        try {
+            val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE, "bn-BD")
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "bn-BD")
+                putExtra(RecognizerIntent.EXTRA_SUPPORTED_LANGUAGES, arrayListOf("bn-BD", "en-US", "hi-IN"))
+                putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+                putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
+                putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 3000L)
+                putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 2000L)
+            }
+            speechRecognizer?.startListening(intent)
+            isListening = true
+        } catch (e: Exception) {
+            Log.e(TAG, "startListening: ${e.message}")
+            isListening = false; scheduleRestart(1500)
+        }
+    }
+
+    private var restartRunnable: Runnable? = null
+    private fun scheduleRestart(delayMs: Long) {
+        restartRunnable?.let { handler.removeCallbacks(it) }
+        restartRunnable = Runnable {
+            if (isActive && !isSpeaking && !isListening) startListening()
+        }.also { handler.postDelayed(it, delayMs) }
+    }
+
+    private fun isEcho(text: String): Boolean {
+        if (lastBotResponse.isEmpty()) return false
+        val u = text.lowercase().trim()
+        val b = lastBotResponse.lowercase().trim()
+        if (u == b) return true
+        if (b.length > 10 && b.contains(u)) return true
+        val uW = u.split(" ").filter { it.length > 3 }.toSet()
+        val bW = b.split(" ").filter { it.length > 3 }.toSet()
+        return if (uW.isEmpty() || bW.isEmpty()) false
+        else uW.intersect(bW).size.toDouble() / uW.size > 0.7
+    }
+
+    // ── Gemini Live ───────────────────────────────────────────────────────────
+
+    private fun setupGeminiLive() {
+        val prefs = getSharedPreferences(Constants.PREFS_NAME, Context.MODE_PRIVATE)
+        val apiKey = prefs.getString(Constants.KEY_API_KEY, "") ?: ""
+        if (apiKey.isBlank()) {
+            addMessage("⚠️ Settings → API Key দিন, তারপর Mic চাপুন।", false); return
+        }
+        val personality = prefs.getString(Constants.KEY_PERSONALITY + "_prompt", "") ?: ""
+        val userName = prefs.getString(Constants.KEY_USER_NAME, "") ?: ""
+        val systemPrompt = personality.ifBlank {
+            "You are MAXI, a smart AI assistant. Reply in Bangla or English. Be helpful and concise."
+        }
+
+        binding.tvStatus.text = "CONNECTING..."
+
+        geminiClient = GeminiWebSocketClient(
+            apiKey = apiKey,
+            systemPrompt = systemPrompt,
+            callback = object : GeminiWebSocketClient.LiveListener {
+
+                override fun onConnected() {
+                    isLiveConnected = true
+                    handler.post {
+                        val greet = if (userName.isNotBlank()) "হ্যালো $userName! আমি MAXI।" else "আমি MAXI, your AI companion।"
+                        binding.tvStatus.text = "MAXI READY"
+                        addMessage(greet, false)
+                        // Greet পাঠাই যাতে MAXI voice এ বলে
+                        geminiClient.sendTextMessage("Greet the user briefly in Bangla.")
+                        if (isActive) scheduleRestart(800)
+                    }
+                }
+
+                override fun onAudioReceived(data: ByteArray) {
+                    // MAXI এর voice reply — speaker এ বাজাও
+                    isSpeaking = true
+                    handler.post { binding.tvStatus.text = "SPEAKING..." }
+                    audioManager.playChunk(data)
+                }
+
+                override fun onTextReceived(text: String) {
+                    if (text.isBlank()) return
+                    lastBotResponse = text.lowercase()
+                    handler.post { addMessage(text, false) }
+                }
+
+                override fun onTurnComplete() {
+                    // MAXI বলা শেষ — আবার শুনতে শুরু করো
+                    isSpeaking = false
+                    audioManager.stop()
+                    handler.post {
+                        binding.tvStatus.text = "LISTENING..."
+                        if (isActive) scheduleRestart(1200)
+                    }
+                }
+
+                override fun onError(msg: String) {
+                    isLiveConnected = false
+                    Log.e(TAG, "Gemini error: $msg")
+                    handler.post {
+                        binding.tvStatus.text = "RECONNECTING..."
+                        handler.postDelayed({
+                            if (isActive) setupGeminiLive()
+                        }, 5000)
+                    }
+                }
+            }
+        )
+        geminiClient.start()
+    }
+
+    // ── UI Setup ──────────────────────────────────────────────────────────────
 
     private fun setupChat() {
         chatAdapter = ChatAdapter(messages)
@@ -150,198 +301,93 @@ class MainActivity : AppCompatActivity() {
         }
 
         binding.micButton.setOnClickListener {
-            val prefs = getSharedPreferences(Constants.PREFS_NAME, Context.MODE_PRIVATE)
-            val apiKey = prefs.getString(Constants.KEY_API_KEY, "") ?: ""
-
-            if (apiKey.isBlank()) {
-                addMessage("⚠️ API Key নেই। Settings → Gemini API Key দিন।", false)
-                return@setOnClickListener
-            }
-
-            if (isListening) {
-                stopListening()
+            if (!isActive) {
+                // Mic চালু করো
+                isActive = true
+                if (!::geminiClient.isInitialized || !isLiveConnected) {
+                    setupGeminiLive()
+                } else {
+                    binding.tvStatus.text = "LISTENING..."
+                    scheduleRestart(300)
+                }
             } else {
-                startConversation(apiKey, prefs)
+                // Mic বন্ধ করো
+                isActive = false
+                isListening = false
+                isSpeaking = false
+                restartRunnable?.let { handler.removeCallbacks(it) }
+                try { speechRecognizer?.cancel() } catch (_: Exception) {}
+                audioManager.stop()
+                binding.tvStatus.text = "SYSTEM READY"
             }
         }
 
+        // Long press = force reconnect
         binding.micButton.setOnLongClickListener {
-            stopListening()
-            geminiClient?.disconnect()
-            geminiClient = null
+            isLiveConnected = false
+            if (::geminiClient.isInitialized) geminiClient.disconnect()
             addMessage("🔄 Reconnecting...", false)
-            binding.tvStatus.text = "RECONNECTING..."
-            val prefs = getSharedPreferences(Constants.PREFS_NAME, Context.MODE_PRIVATE)
-            val apiKey = prefs.getString(Constants.KEY_API_KEY, "") ?: ""
-            if (apiKey.isNotBlank()) {
-                handler.postDelayed({ startConversation(apiKey, prefs) }, 1000)
-            }
+            isActive = true
+            setupGeminiLive()
             true
         }
     }
 
-    private fun startConversation(apiKey: String, prefs: android.content.SharedPreferences) {
-        val personality = prefs.getString(Constants.KEY_PERSONALITY + "_prompt", "") ?: ""
-        val userName = prefs.getString(Constants.KEY_USER_NAME, "") ?: ""
-
-        val systemPrompt = if (personality.isNotBlank()) personality else
-            "You are MAXI, a smart AI companion. Reply in Bangla or English based on user's language. Be helpful and friendly."
-
-        binding.tvStatus.text = "CONNECTING..."
-        addMessage("🔗 Connecting to MAXI...", false)
-
-        geminiClient = GeminiWebSocketClient(
-            apiKey = apiKey,
-            systemPrompt = systemPrompt,
-            onConnected = {
-                handler.post {
-                    binding.tvStatus.text = "LISTENING..."
-                    val greet = if (userName.isNotBlank()) "Hello $userName! আমি MAXI। বলুন।" else "আমি MAXI। বলুন।"
-                    addMessage(greet, false)
-                    startMic()
-                }
-            },
-            onAudioReceived = { pcm ->
-                isSpeaking = true
-                audioTrack?.write(pcm, 0, pcm.size)
-                handler.postDelayed({ isSpeaking = false }, 500)
-            },
-            onTextReceived = { text ->
-                handler.post {
-                    if (text.isNotBlank()) addMessage(text, false)
-                }
-            },
-            onTurnComplete = {
-                handler.post { binding.tvStatus.text = "LISTENING..." }
-            },
-            onError = { err ->
-                handler.post {
-                    addMessage("❌ Error: $err", false)
-                    binding.tvStatus.text = "ERROR"
-                    stopListening()
-                }
-            }
-        )
-        geminiClient?.connect()
+    fun addMessage(text: String, isUser: Boolean) {
+        val time = timeFormat.format(Date())
+        chatAdapter.addMessage(ChatMessage(text, isUser, time))
+        binding.chatRecyclerView.scrollToPosition(chatAdapter.itemCount - 1)
     }
 
-    private fun startMic() {
-        if (isListening) return
-        val bufSize = AudioRecord.getMinBufferSize(
-            SAMPLE_RATE_IN,
-            AudioFormat.CHANNEL_IN_MONO,
-            AudioFormat.ENCODING_PCM_16BIT
-        )
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
-            != PackageManager.PERMISSION_GRANTED) return
+    // ── Permissions ───────────────────────────────────────────────────────────
 
-        audioRecord = AudioRecord(
-            MediaRecorder.AudioSource.VOICE_COMMUNICATION,
-            SAMPLE_RATE_IN,
-            AudioFormat.CHANNEL_IN_MONO,
-            AudioFormat.ENCODING_PCM_16BIT,
-            bufSize * 2
-        )
-        audioRecord?.startRecording()
-        isListening = true
-
-        recordThread = Thread {
-            val buffer = ByteArray(CHUNK_SIZE)
-            while (isListening && !Thread.interrupted()) {
-                val read = audioRecord?.read(buffer, 0, buffer.size) ?: -1
-                if (read > 0 && !isSpeaking) {
-                    geminiClient?.sendAudioChunk(buffer.copyOf(read))
-                }
-            }
-        }.also {
-            it.name = "MAXI_Mic"
-            it.isDaemon = true
-            it.start()
-        }
-    }
-
-    private fun stopListening() {
-        isListening = false
-        recordThread?.interrupt()
-        recordThread = null
-        try {
-            audioRecord?.stop()
-            audioRecord?.release()
-            audioRecord = null
-        } catch (e: Exception) {}
-        handler.post { binding.tvStatus.text = "SYSTEM READY" }
-    }
-
-    private fun checkAndRequestPermissions() {
+    private fun checkPermissions() {
         val missing = PERMISSIONS.filter {
             ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
         }
-        if (missing.isNotEmpty()) {
-            ActivityCompat.requestPermissions(this, missing.toTypedArray(), PERMISSION_REQUEST_CODE)
-        } else {
-            onPermissionsReady()
-        }
+        if (missing.isNotEmpty()) ActivityCompat.requestPermissions(this, missing.toTypedArray(), 101)
+        else onPermissionsReady()
     }
 
-    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<String>, results: IntArray) {
-        super.onRequestPermissionsResult(requestCode, permissions, results)
-        if (requestCode == PERMISSION_REQUEST_CODE) {
-            val denied = results.any { it != PackageManager.PERMISSION_GRANTED }
-            if (!denied) onPermissionsReady()
-            else addMessage("⚠️ কিছু permission দেওয়া হয়নি। MAXI পুরোপুরি কাজ নাও করতে পারে।", false)
-        }
+    override fun onRequestPermissionsResult(rc: Int, p: Array<String>, gr: IntArray) {
+        super.onRequestPermissionsResult(rc, p, gr)
+        onPermissionsReady()
     }
 
     private fun onPermissionsReady() {
         binding.tvStatus.text = "SYSTEM READY"
         addMessage("আমি MAXI, your AI companion.", false)
         val prefs = getSharedPreferences(Constants.PREFS_NAME, Context.MODE_PRIVATE)
-        val apiKey = prefs.getString(Constants.KEY_API_KEY, "") ?: ""
-        if (apiKey.isBlank()) {
+        if ((prefs.getString(Constants.KEY_API_KEY, "") ?: "").isBlank())
             addMessage("⚠️ Settings → API Key দিন, তারপর Mic চাপুন।", false)
-        } else {
-            addMessage("✅ Mic বাটন চাপুন কথা বলতে।", false)
-        }
-    }
-
-    fun addMessage(text: String, isUser: Boolean) {
-        val time = timeFormat.format(Date())
-        messages.add(ChatMessage(text, isUser, time))
-        chatAdapter.notifyItemInserted(messages.size - 1)
-        binding.chatRecyclerView.scrollToPosition(messages.size - 1)
-    }
-
-    private fun startClock() { handler.post(clockRunnable) }
-
-    private fun updateRam() {
-        val am = getSystemService(ACTIVITY_SERVICE) as ActivityManager
-        val mi = ActivityManager.MemoryInfo()
-        am.getMemoryInfo(mi)
-        val usedMb = (mi.totalMem - mi.availMem) / (1024 * 1024)
-        binding.tvRam.text = "${usedMb}MB"
-    }
-
-    private fun registerBatteryReceiver() {
-        registerReceiver(batteryReceiver, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
+        else
+            addMessage("✅ নিচের Mic বাটন চাপুন কথা বলতে।", false)
     }
 
     override fun onResume() {
         super.onResume()
-        // Re-check if API key was just set
+        // Settings থেকে ফিরলে যদি API key নতুন দেওয়া হয়
         val prefs = getSharedPreferences(Constants.PREFS_NAME, Context.MODE_PRIVATE)
         val apiKey = prefs.getString(Constants.KEY_API_KEY, "") ?: ""
-        if (apiKey.isNotBlank() && geminiClient == null) {
-            binding.tvStatus.text = "SYSTEM READY — Mic চাপুন"
+        if (apiKey.isNotBlank() && isActive && (!::geminiClient.isInitialized || !isLiveConnected)) {
+            setupGeminiLive()
         }
+    }
+
+    private fun updateRam() {
+        val am = getSystemService(ACTIVITY_SERVICE) as ActivityManager
+        val mi = ActivityManager.MemoryInfo(); am.getMemoryInfo(mi)
+        binding.tvRam.text = "${(mi.totalMem - mi.availMem) / (1024 * 1024)}MB"
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        stopListening()
-        geminiClient?.disconnect()
-        audioTrack?.stop()
-        audioTrack?.release()
+        isActive = false
+        restartRunnable?.let { handler.removeCallbacks(it) }
         handler.removeCallbacks(clockRunnable)
-        try { unregisterReceiver(batteryReceiver) } catch (e: Exception) {}
+        try { speechRecognizer?.cancel(); speechRecognizer?.destroy() } catch (_: Exception) {}
+        if (::geminiClient.isInitialized) geminiClient.disconnect()
+        audioManager.release()
+        try { unregisterReceiver(batteryReceiver) } catch (_: Exception) {}
     }
 }
