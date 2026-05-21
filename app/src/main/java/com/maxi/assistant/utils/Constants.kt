@@ -2,7 +2,7 @@ package com.maxi.assistant.utils
 
 object Constants {
     // Gemini
-    const val GEMINI_MODEL = "models/gemini-2.5-flash-native-audio-preview-12-2025"
+    const val GEMINI_MODEL = "models/gemini-2.0-flash-live-001"
     const val GEMINI_WS_BASE = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent"
     const val GEMINI_VOICE = "Aoede"
 
