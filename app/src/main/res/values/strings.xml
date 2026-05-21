@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">MAXI</string>
+    <string name="accessibility_service_description">MAXI AI Assistant needs accessibility access to help automate tasks on your device.</string>
 </resources>
